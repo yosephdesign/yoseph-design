@@ -1,0 +1,20 @@
+{
+  "name": "arch-design",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": ["client", "server", "admin"],
+  "scripts": {
+    "dev": "concurrently -n c,s,a \"npm run dev -w client\" \"npm run dev -w server\" \"npm run dev -w admin\"",
+    "dev:client": "npm run dev -w client",
+    "dev:server": "npm run dev -w server",
+    "dev:admin": "npm run dev -w admin",
+    "build": "npm run build -w client && npm run build -w server && npm run build -w admin",
+    "build:client": "npm run build -w client",
+    "build:server": "npm run build -w server",
+    "build:admin": "npm run build -w admin"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
