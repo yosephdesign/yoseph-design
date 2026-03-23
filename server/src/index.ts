@@ -22,7 +22,7 @@ import {
   type Order,
   type OrderStatus,
   type StudioModel,
-} from "./store";
+} from "./store.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;

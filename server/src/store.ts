@@ -1,5 +1,5 @@
-import { Product, PRODUCTS } from "./data/products";
-import { StudioModel, STUDIO_MODELS } from "./data/studioModels";
+import { Product, PRODUCTS } from "./data/products.js";
+import { StudioModel, STUDIO_MODELS } from "./data/studioModels.js";
 
 export type { Product, StudioModel };
 
