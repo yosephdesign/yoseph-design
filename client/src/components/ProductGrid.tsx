@@ -5,6 +5,7 @@ import { ProductCard } from './ProductCard';
 import { ProductDetail } from './ProductDetail';
 import { Product3DModal } from './Product3DModal';
 import { Product } from '../data/products';
+import { API_URL } from '../config';
 
 export const ProductGrid = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -47,7 +48,7 @@ export const ProductGrid = () => {
       ) : products.length === 0 ? (
         <div className="text-center py-16 text-neutral-500">
           <p className="text-lg">No products found.</p>
-          <p className="text-sm mt-2">Make sure the server is running at http://localhost:4000</p>
+          <p className="text-sm mt-2">Make sure the API is reachable ({API_URL}).</p>
         </div>
       ) : filteredProducts.length === 0 ? (
         <div className="text-center py-16 text-neutral-500">

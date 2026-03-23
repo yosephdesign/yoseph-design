@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { StudioModel, STUDIO_MODELS } from '../data/studioModels';
-
-const API_URL = 'http://localhost:4000';
+import { API_URL } from '../config';
 
 interface StudioContextType {
   studioModels: StudioModel[];

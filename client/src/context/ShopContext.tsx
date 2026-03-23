@@ -1,8 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Product } from '../data/products';
 import { toast } from 'sonner';
-
-const API_URL = 'http://localhost:4000';
+import { API_URL } from '../config';
 
 interface OrderItem {
   id: string;
