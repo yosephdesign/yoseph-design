@@ -1,0 +1,16 @@
+# Optional Blueprint for the Vite storefront. If you deploy manually instead, see comments below.
+services:
+  - type: web
+    name: yoseph-design-storefront
+    runtime: static
+    buildCommand: npm ci && npm run build -w client
+    staticPublishPath: ./client/dist
+    buildFilter:
+      paths:
+        - client/**
+        - package.json
+        - package-lock.json
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
