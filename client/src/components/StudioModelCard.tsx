@@ -41,7 +41,7 @@ export const StudioModelCard = ({ model, onViewDetails }: StudioModelCardProps) 
             transform: isHovering ? `scale(${ZOOM_SCALE})` : 'scale(1)',
           }}
         />
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none [&_button]:pointer-events-auto">
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none [&_button]:pointer-events-auto">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -67,6 +67,13 @@ export const StudioModelCard = ({ model, onViewDetails }: StudioModelCardProps) 
           {model.name}
         </h3>
         <p className="text-xs text-neutral-500 mt-1">{model.category}</p>
+        <button
+          onClick={onViewDetails}
+          className="mt-3 w-full bg-amber-500 hover:bg-amber-600 text-white py-2.5 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors md:hidden rounded-4xl"
+        >
+          <Eye size={16} />
+          View Details
+        </button>
       </div>
     </div>
   );

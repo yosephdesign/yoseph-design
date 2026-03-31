@@ -112,7 +112,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onGet3DModel 
         {has3D && (
           <button
             onClick={handleGet3DModel}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider transition-all border rounded-lg bg-neutral-100 text-neutral-700 border-neutral-200/60 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 active:scale-95 cursor-pointer"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider transition-all border  bg-neutral-100 text-neutral-700 border-neutral-200/60 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 active:scale-95 cursor-pointer rounded-4xl"
             title="Get 3D model"
           >
             <Box size={13} />
