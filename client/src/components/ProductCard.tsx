@@ -60,7 +60,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onGet3DModel 
             transform: isHovering ? `scale(${ZOOM_SCALE})` : 'scale(1)',
           }}
         />
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none [&_button]:pointer-events-auto">
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 hidden lg:flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none [&_button]:pointer-events-auto">
            <div className="flex flex-wrap gap-2 justify-center p-2">
              <button 
                onClick={handleAddToCart}
@@ -72,20 +72,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onGet3DModel 
              <button className="bg-white text-black p-3 hover:bg-neutral-900 hover:text-white transition-colors" title="View Details">
                <Info size={20} />
              </button>
-             <button 
-               onClick={handleGet3DModel}
-               className={`p-3 transition-colors flex items-center gap-1.5 ${
-                 has3D
-                   ? 'bg-white text-black hover:bg-neutral-900 hover:text-white'
-                   : 'bg-neutral-200 text-neutral-400 cursor-default'
-               }`}
-               title={has3D ? 'Get 3D model' : '3D model unavailable'}
-             >
-               {has3D ? <Box size={20} /> : <XCircle size={18} />}
-               <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">
-                 {has3D ? '3D' : 'N/A'}
-               </span>
-             </button>
+             {has3D && (
+               <button 
+                 onClick={handleGet3DModel}
+                 className="p-3 transition-colors flex items-center gap-1.5 bg-white text-black hover:bg-neutral-900 hover:text-white"
+                 title="Get 3D model"
+               >
+                 <Box size={20} />
+                 <span className="text-[10px] font-bold uppercase tracking-wider">3D</span>
+               </button>
+             )}
            </div>
         </div>
         {product.featured && (
@@ -96,6 +92,35 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onGet3DModel 
           </div>
         )}
       </div>
+
+      {/* Mobile/Tablet action buttons */}
+      <div className="flex lg:hidden gap-4 mb-3">
+        <button
+          onClick={handleAddToCart}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-semibold uppercase tracking-wider active:scale-95 transition-all cursor-pointer rounded-4xl"
+        >
+          <Plus size={13} />
+          <span>Add</span>
+        </button>
+        <button
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-neutral-100 text-neutral-700 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 text-[11px] font-semibold uppercase tracking-wider active:scale-90 transition-all border border-neutral-200/60 cursor-pointer rounded-4xl"
+          title="View Details"
+        >
+          <Info size={13} />
+          <span>Details</span>
+        </button>
+        {has3D && (
+          <button
+            onClick={handleGet3DModel}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider transition-all border rounded-lg bg-neutral-100 text-neutral-700 border-neutral-200/60 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 active:scale-95 cursor-pointer"
+            title="Get 3D model"
+          >
+            <Box size={13} />
+            <span>3D</span>
+          </button>
+        )}
+      </div>
+
       <div className="flex justify-between items-start">
         <div className="flex-1 mr-4">
           <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-800 line-clamp-1">{product.name}</h3>

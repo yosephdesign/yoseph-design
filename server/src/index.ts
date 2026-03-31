@@ -4,6 +4,7 @@ import express from "express";
 import cors from "cors";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
+import { connectDB } from "./db.js";
 import {
   getProducts,
   getProductById,
@@ -18,10 +19,10 @@ import {
   addStudioModel,
   updateStudioModel,
   deleteStudioModel,
-  type Product,
-  type Order,
+  type ProductDoc,
+  type OrderDoc,
   type OrderStatus,
-  type StudioModel,
+  type StudioModelDoc,
 } from "./store.js";
 
 const app = express();
@@ -40,7 +41,7 @@ cloudinary.config({
 // Multer configuration for memory storage
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req: express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
@@ -52,7 +53,7 @@ const upload = multer({
 
 const pdfUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB for PDFs
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req: express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
@@ -63,7 +64,6 @@ const pdfUpload = multer({
 });
 
 // Simple admin auth (demo only – use proper auth in production)
-// Stateless token so it remains valid after server restart
 const ADMIN_SECRET = "admin123";
 const ADMIN_EMAIL = "admin@example.com";
 
@@ -107,7 +107,6 @@ app.post("/api/upload", requireAdmin, upload.single("image"), async (req, res) =
       return res.status(400).json({ error: "No image file provided" });
     }
 
-    // Check if Cloudinary is configured
     if (!process.env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME === 'your_cloud_name') {
       return res.status(500).json({ 
         error: "Cloudinary not configured", 
@@ -115,7 +114,6 @@ app.post("/api/upload", requireAdmin, upload.single("image"), async (req, res) =
       });
     }
 
-    // Upload to Cloudinary using buffer
     const result = await new Promise<any>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
@@ -184,81 +182,141 @@ app.post("/api/upload-pdf", requireAdmin, pdfUpload.single("pdf"), async (req, r
 });
 
 // Products (public read; admin write)
-app.get("/api/products", (_req, res) => {
-  res.json(getProducts());
+app.get("/api/products", async (_req, res) => {
+  try {
+    res.json(await getProducts());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.get("/api/products/:id", (req, res) => {
-  const p = getProductById(req.params.id);
-  if (!p) return res.status(404).json({ error: "Not found" });
-  res.json(p);
+app.get("/api/products/:id", async (req, res) => {
+  try {
+    const p = await getProductById(req.params.id);
+    if (!p) return res.status(404).json({ error: "Not found" });
+    res.json(p);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post("/api/products", requireAdmin, (req, res) => {
-  const body = req.body as Omit<Product, "id">;
-  const created = addProduct(body);
-  res.status(201).json(created);
+app.post("/api/products", requireAdmin, async (req, res) => {
+  try {
+    const body = req.body as Omit<ProductDoc, "id">;
+    const created = await addProduct(body);
+    res.status(201).json(created);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put("/api/products/:id", requireAdmin, (req, res) => {
-  const updated = updateProduct(req.params.id, req.body);
-  if (!updated) return res.status(404).json({ error: "Not found" });
-  res.json(updated);
+app.put("/api/products/:id", requireAdmin, async (req, res) => {
+  try {
+    const updated = await updateProduct(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.delete("/api/products/:id", requireAdmin, (req, res) => {
-  const ok = deleteProduct(req.params.id);
-  if (!ok) return res.status(404).json({ error: "Not found" });
-  res.status(204).send();
+app.delete("/api/products/:id", requireAdmin, async (req, res) => {
+  try {
+    const ok = await deleteProduct(req.params.id);
+    if (!ok) return res.status(404).json({ error: "Not found" });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Orders (client create; admin read/update)
-app.get("/api/orders", requireAdmin, (_req, res) => {
-  res.json(getOrders());
+app.get("/api/orders", requireAdmin, async (_req, res) => {
+  try {
+    res.json(await getOrders());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post("/api/orders", (req, res) => {
-  const body = req.body as Omit<Order, "id" | "date">;
-  const created = createOrder(body);
-  res.status(201).json(created);
+app.post("/api/orders", async (req, res) => {
+  try {
+    const body = req.body as Omit<OrderDoc, "id" | "date">;
+    const created = await createOrder(body);
+    res.status(201).json(created);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put("/api/orders/:id/status", requireAdmin, (req, res) => {
-  const { status } = req.body as { status: OrderStatus };
-  const updated = updateOrderStatus(req.params.id, status);
-  if (!updated) return res.status(404).json({ error: "Not found" });
-  res.json(updated);
+app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.body as { status: OrderStatus };
+    const updated = await updateOrderStatus(req.params.id, status);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Studio models (public read; admin write)
-app.get("/api/studio-models", (_req, res) => {
-  res.json(getStudioModels());
+app.get("/api/studio-models", async (_req, res) => {
+  try {
+    res.json(await getStudioModels());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.get("/api/studio-models/:id", (req, res) => {
-  const m = getStudioModelById(req.params.id);
-  if (!m) return res.status(404).json({ error: "Not found" });
-  res.json(m);
+app.get("/api/studio-models/:id", async (req, res) => {
+  try {
+    const m = await getStudioModelById(req.params.id);
+    if (!m) return res.status(404).json({ error: "Not found" });
+    res.json(m);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post("/api/studio-models", requireAdmin, (req, res) => {
-  const body = req.body as Omit<StudioModel, "id">;
-  const created = addStudioModel(body);
-  res.status(201).json(created);
+app.post("/api/studio-models", requireAdmin, async (req, res) => {
+  try {
+    const body = req.body as Omit<StudioModelDoc, "id">;
+    const created = await addStudioModel(body);
+    res.status(201).json(created);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put("/api/studio-models/:id", requireAdmin, (req, res) => {
-  const updated = updateStudioModel(req.params.id, req.body);
-  if (!updated) return res.status(404).json({ error: "Not found" });
-  res.json(updated);
+app.put("/api/studio-models/:id", requireAdmin, async (req, res) => {
+  try {
+    const updated = await updateStudioModel(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.delete("/api/studio-models/:id", requireAdmin, (req, res) => {
-  const ok = deleteStudioModel(req.params.id);
-  if (!ok) return res.status(404).json({ error: "Not found" });
-  res.status(204).send();
+app.delete("/api/studio-models/:id", requireAdmin, async (req, res) => {
+  try {
+    const ok = await deleteStudioModel(req.params.id);
+    if (!ok) return res.status(404).json({ error: "Not found" });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+// Connect to MongoDB then start server
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running at http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to connect to MongoDB:", err.message);
+    process.exit(1);
+  });

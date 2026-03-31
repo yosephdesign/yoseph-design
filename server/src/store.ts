@@ -1,116 +1,149 @@
-import { Product, PRODUCTS } from "./data/products.js";
-import { StudioModel, STUDIO_MODELS } from "./data/studioModels.js";
+import { Product, type IProduct } from "./models/Product.js";
+import { StudioModel, type IStudioModel, type ModelFormat } from "./models/StudioModel.js";
+import { Order, type IOrder, type OrderStatus } from "./models/Order.js";
 
-export type { Product, StudioModel };
+export type { OrderStatus, ModelFormat };
 
-export type OrderStatus = "pending" | "processed" | "shipped" | "delivered" | "cancelled";
+export type ProductDoc = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  image: string;
+  images?: string[];
+  featured?: boolean;
+  modelFiles?: { format: string; url?: string }[];
+};
 
-export interface OrderItem extends Product {
-  quantity: number;
-}
+export type StudioModelDoc = {
+  id: string;
+  name: string;
+  description: string;
+  price?: number;
+  format?: ModelFormat;
+  category: string;
+  image: string;
+  featured?: boolean;
+  pdfUrl?: string;
+};
 
-export interface CustomerInfo {
-  firstName: string;
-  lastName: string;
-  email: string;
-  address: string;
-  city: string;
-  zipCode: string;
-}
-
-export interface Order {
+export type OrderDoc = {
   id: string;
   date: string;
   status: OrderStatus;
-  items: OrderItem[];
+  items: {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    category: string;
+    image: string;
+    quantity: number;
+  }[];
   total: number;
-  customer: CustomerInfo;
-}
-
-const products: Product[] = [...PRODUCTS];
-const orders: Order[] = [];
-const studioModels: StudioModel[] = [...STUDIO_MODELS];
-
-export function getProducts(): Product[] {
-  return [...products].reverse(); // newest first (recently added)
-}
-
-export function getProductById(id: string): Product | undefined {
-  return products.find((p) => p.id === id);
-}
-
-export function addProduct(p: Omit<Product, "id">): Product {
-  const newProduct: Product = {
-    ...p,
-    id: Math.random().toString(36).substring(2, 9),
+  customer: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    address: string;
+    city: string;
+    zipCode: string;
   };
-  products.push(newProduct);
-  return newProduct;
+};
+
+// --- Products ---
+
+export async function getProducts(): Promise<ProductDoc[]> {
+  const docs = await Product.find().sort({ createdAt: -1 });
+  return docs.map((d) => d.toJSON() as unknown as ProductDoc);
 }
 
-export function updateProduct(id: string, p: Partial<Product>): Product | undefined {
-  const i = products.findIndex((x) => x.id === id);
-  if (i === -1) return undefined;
-  products[i] = { ...products[i], ...p };
-  return products[i];
+export async function getProductById(id: string): Promise<ProductDoc | null> {
+  const doc = await Product.findById(id);
+  return doc ? (doc.toJSON() as unknown as ProductDoc) : null;
 }
 
-export function deleteProduct(id: string): boolean {
-  const i = products.findIndex((x) => x.id === id);
-  if (i === -1) return false;
-  products.splice(i, 1);
-  return true;
+export async function addProduct(
+  p: Omit<ProductDoc, "id">
+): Promise<ProductDoc> {
+  const doc = await Product.create(p);
+  return doc.toJSON() as unknown as ProductDoc;
 }
 
-export function getOrders(): Order[] {
-  return [...orders];
+export async function updateProduct(
+  id: string,
+  p: Partial<ProductDoc>
+): Promise<ProductDoc | null> {
+  const doc = await Product.findByIdAndUpdate(id, p, { new: true });
+  return doc ? (doc.toJSON() as unknown as ProductDoc) : null;
 }
 
-export function createOrder(order: Omit<Order, "id" | "date">): Order {
-  const newOrder: Order = {
+export async function deleteProduct(id: string): Promise<boolean> {
+  const result = await Product.findByIdAndDelete(id);
+  return result !== null;
+}
+
+// --- Orders ---
+
+export async function getOrders(): Promise<OrderDoc[]> {
+  const docs = await Order.find().sort({ createdAt: -1 });
+  return docs.map((d) => d.toJSON() as unknown as OrderDoc);
+}
+
+export async function createOrder(
+  order: Omit<OrderDoc, "id" | "date">
+): Promise<OrderDoc> {
+  const doc = await Order.create({
     ...order,
-    id: `ORD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+    orderId: `ORD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
     date: new Date().toISOString(),
-  };
-  orders.push(newOrder);
-  return newOrder;
+  });
+  return doc.toJSON() as unknown as OrderDoc;
 }
 
-export function updateOrderStatus(id: string, status: OrderStatus): Order | undefined {
-  const o = orders.find((x) => x.id === id);
-  if (!o) return undefined;
-  o.status = status;
-  return o;
+export async function updateOrderStatus(
+  orderId: string,
+  status: OrderStatus
+): Promise<OrderDoc | null> {
+  const doc = await Order.findOneAndUpdate(
+    { orderId },
+    { status },
+    { new: true }
+  );
+  return doc ? (doc.toJSON() as unknown as OrderDoc) : null;
 }
 
-// Studio models (3D models for Studio page)
-export function getStudioModels(): StudioModel[] {
-  return [...studioModels].reverse(); // newest first (recently added)
+// --- Studio Models ---
+
+export async function getStudioModels(): Promise<StudioModelDoc[]> {
+  const docs = await StudioModel.find().sort({ createdAt: -1 });
+  return docs.map((d) => d.toJSON() as unknown as StudioModelDoc);
 }
 
-export function getStudioModelById(id: string): StudioModel | undefined {
-  return studioModels.find((m) => m.id === id);
+export async function getStudioModelById(
+  id: string
+): Promise<StudioModelDoc | null> {
+  const doc = await StudioModel.findById(id);
+  return doc ? (doc.toJSON() as unknown as StudioModelDoc) : null;
 }
 
-export function addStudioModel(m: Omit<StudioModel, "id">): StudioModel {
-  const newModel: StudioModel = {
-    ...m,
-    id: `sm-${Math.random().toString(36).substring(2, 9)}`,
-  };
-  studioModels.push(newModel);
-  return newModel;
+export async function addStudioModel(
+  m: Omit<StudioModelDoc, "id">
+): Promise<StudioModelDoc> {
+  const doc = await StudioModel.create(m);
+  return doc.toJSON() as unknown as StudioModelDoc;
 }
 
-export function updateStudioModel(id: string, m: Partial<StudioModel>): StudioModel | undefined {
-  const i = studioModels.findIndex((x) => x.id === id);
-  if (i === -1) return undefined;
-  studioModels[i] = { ...studioModels[i], ...m };
-  return studioModels[i];
+export async function updateStudioModel(
+  id: string,
+  m: Partial<StudioModelDoc>
+): Promise<StudioModelDoc | null> {
+  const doc = await StudioModel.findByIdAndUpdate(id, m, { new: true });
+  return doc ? (doc.toJSON() as unknown as StudioModelDoc) : null;
 }
 
-export function deleteStudioModel(id: string): boolean {
-  const i = studioModels.findIndex((x) => x.id === id);
-  if (i === -1) return false;
-  studioModels.splice(i, 1);
-  return true;
+export async function deleteStudioModel(id: string): Promise<boolean> {
+  const result = await StudioModel.findByIdAndDelete(id);
+  return result !== null;
 }

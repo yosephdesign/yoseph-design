@@ -65,11 +65,11 @@ export const Product3DModal = ({ product, isOpen, onClose }: Product3DModalProps
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 transition={{ duration: 0.2 }}
-                className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-4xl bg-white z-[121] shadow-2xl focus:outline-none rounded-xl overflow-hidden"
+                className="fixed inset-3 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)] sm:max-w-md md:max-w-xl lg:max-w-3xl sm:max-h-[85vh] bg-white z-[121] shadow-2xl focus:outline-none rounded-xl overflow-hidden"
               >
-                <div className="flex flex-col sm:flex-row max-h-[85vh]">
+                <div className="flex flex-col md:flex-row max-h-[85vh]">
                   {/* Left — Image */}
-                  <div className="relative w-full sm:w-1/2 h-56 sm:h-auto sm:min-h-[520px] bg-neutral-100 shrink-0">
+                  <div className="relative w-full md:w-1/2 h-40 sm:h-48 md:h-auto md:min-h-[380px] lg:min-h-[460px] bg-neutral-100 shrink-0">
                     <img
                       src={product.image}
                       alt={product.name}
@@ -77,7 +77,7 @@ export const Product3DModal = ({ product, isOpen, onClose }: Product3DModalProps
                     />
                     <button
                       onClick={onClose}
-                      className="absolute top-3 right-3 z-10 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg sm:hidden"
+                      className="absolute top-3 right-3 z-10 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg md:hidden"
                     >
                       <X size={20} />
                     </button>
@@ -85,28 +85,28 @@ export const Product3DModal = ({ product, isOpen, onClose }: Product3DModalProps
 
                   {/* Right — Details & formats */}
                   <div className="flex-1 flex flex-col overflow-y-auto">
-                    <div className="p-5 sm:p-8 flex flex-col h-full">
-                      <div className="flex justify-between items-start mb-5">
+                    <div className="p-4 sm:p-5 md:p-6 lg:p-8 flex flex-col h-full">
+                      <div className="flex justify-between items-start mb-3 sm:mb-4 md:mb-5">
                         <div>
-                          <h2 className="text-lg font-semibold tracking-tight">3D Model Files</h2>
-                          <p className="text-xs text-neutral-400 mt-0.5">
+                          <h2 className="text-base sm:text-lg font-semibold tracking-tight">3D Model Files</h2>
+                          <p className="text-[10px] sm:text-xs text-neutral-400 mt-0.5">
                             {hasFiles ? `${files.length} format${files.length > 1 ? 's' : ''} available` : 'No 3D files configured yet'}
                           </p>
                         </div>
-                        <Dialog.Close className="hidden sm:flex p-2 hover:bg-neutral-100 rounded-full transition-colors">
+                        <Dialog.Close className="hidden md:flex p-2 hover:bg-neutral-100 rounded-full transition-colors">
                           <X size={20} />
                         </Dialog.Close>
                       </div>
 
-                      <p className="text-sm font-medium text-neutral-800 mb-0.5">{product.name}</p>
-                      <p className="text-xs text-neutral-500 mb-5">{product.category} &middot; ${product.price.toLocaleString()}</p>
+                      <p className="text-xs sm:text-sm font-medium text-neutral-800 mb-0.5">{product.name}</p>
+                      <p className="text-[10px] sm:text-xs text-neutral-500 mb-3 sm:mb-4 md:mb-5">{product.category} &middot; ${product.price.toLocaleString()}</p>
 
                       {hasFiles ? (
                         <>
                           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 mb-3">
                             Select format
                           </p>
-                          <div className="grid grid-cols-2 gap-2 mb-6">
+                          <div className="grid grid-cols-2 gap-1.5 sm:gap-2 mb-4 md:mb-6">
                             {files.map(({ format }) => {
                               const isSelected = selectedFormat === format;
                               const desc = FORMAT_INFO[format] || format;
@@ -114,20 +114,20 @@ export const Product3DModal = ({ product, isOpen, onClose }: Product3DModalProps
                                 <button
                                   key={format}
                                   onClick={() => setSelectedFormat(isSelected ? null : format)}
-                                  className={`relative flex items-start gap-3 p-3 rounded-lg border text-left transition-all ${
+                                  className={`relative flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border text-left transition-all ${
                                     isSelected
                                       ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-400'
                                       : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'
                                   }`}
                                 >
                                   <div className="flex-1 min-w-0">
-                                    <span className="text-xs font-bold text-neutral-800 block">.{format.toLowerCase()}</span>
-                                    <span className="text-[10px] text-neutral-500 block mt-0.5 leading-tight">{desc}</span>
+                                    <span className="text-[10px] sm:text-xs font-bold text-neutral-800 block">.{format.toLowerCase()}</span>
+                                    <span className="text-[9px] sm:text-[10px] text-neutral-500 block mt-0.5 leading-tight">{desc}</span>
                                   </div>
-                                  <Download size={14} className={`shrink-0 mt-0.5 ${isSelected ? 'text-amber-500' : 'text-neutral-300'}`} />
+                                  <Download size={12} className={`shrink-0 mt-0.5 sm:w-3.5 sm:h-3.5 ${isSelected ? 'text-amber-500' : 'text-neutral-300'}`} />
                                   {isSelected && (
-                                    <div className="absolute top-1.5 right-1.5">
-                                      <Check size={12} className="text-amber-500" />
+                                    <div className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5">
+                                      <Check size={10} className="sm:w-3 sm:h-3 text-amber-500" />
                                     </div>
                                   )}
                                 </button>
@@ -147,18 +147,20 @@ export const Product3DModal = ({ product, isOpen, onClose }: Product3DModalProps
 
                       <button
                         onClick={handleAddToCart}
-                        className="w-full bg-amber-500 text-white py-3.5 text-sm font-semibold uppercase tracking-wider hover:bg-amber-600 transition-all flex items-center justify-center gap-2.5 rounded-lg shadow-lg hover:shadow-xl"
+                        className="w-full bg-amber-500 text-white py-2.5 sm:py-3 md:py-3.5 text-xs sm:text-sm font-semibold uppercase tracking-wider hover:bg-amber-600 transition-all flex items-center justify-center gap-2 rounded-lg shadow-lg hover:shadow-xl"
                       >
-                        <ShoppingBag size={18} />
+                        <ShoppingBag size={16} className="sm:hidden" />
+                        <ShoppingBag size={18} className="hidden sm:block" />
                         Add to Cart — ${product.price.toLocaleString()}
                       </button>
 
                       {selectedFormat && (
                         <button
                           onClick={() => handleDownload(selectedFormat)}
-                          className="w-full mt-2 border border-neutral-200 text-neutral-700 py-3 text-sm font-medium uppercase tracking-wider hover:bg-neutral-50 transition-all flex items-center justify-center gap-2 rounded-lg"
+                          className="w-full mt-2 border border-neutral-200 text-neutral-700 py-2.5 sm:py-3 text-xs sm:text-sm font-medium uppercase tracking-wider hover:bg-neutral-50 transition-all flex items-center justify-center gap-2 rounded-lg"
                         >
-                          <Download size={16} />
+                          <Download size={14} className="sm:hidden" />
+                          <Download size={16} className="hidden sm:block" />
                           Download .{selectedFormat.toLowerCase()} file
                         </button>
                       )}
