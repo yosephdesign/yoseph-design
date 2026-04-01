@@ -33,6 +33,11 @@ import {
   getNewsletterSubscribers,
   getDashboardStats,
 } from "./store.js";
+import {
+  AdminSettings,
+  hashPassword,
+  verifyPassword,
+} from "./models/AdminSettings.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -72,33 +77,60 @@ const pdfUpload = multer({
   }
 });
 
-// Simple admin auth (demo only – use proper auth in production)
-const ADMIN_SECRET = "admin123";
-const ADMIN_EMAIL = "admin@example.com";
+// Admin auth — credentials stored in MongoDB with hardcoded fallback
+const DEFAULT_ADMIN_EMAIL = "admin@example.com";
+const DEFAULT_ADMIN_PASSWORD = "admin123";
+const TOKEN_SECRET = process.env.TOKEN_SECRET ?? "fallback-token-secret-change-me";
 
-function createAdminToken(): string {
-  const payload = `${ADMIN_EMAIL}:admin`;
-  return "admin-" + crypto.createHmac("sha256", ADMIN_SECRET).update(payload).digest("hex");
+async function getOrCreateAdmin() {
+  let admin = await AdminSettings.findOne();
+  if (!admin) {
+    const { hash, salt } = hashPassword(DEFAULT_ADMIN_PASSWORD);
+    admin = await AdminSettings.create({
+      email: DEFAULT_ADMIN_EMAIL,
+      passwordHash: hash,
+      passwordSalt: salt,
+    });
+  }
+  return admin;
 }
+
+function createAdminToken(email: string): string {
+  const payload = `${email}:admin:${Date.now()}`;
+  return "admin-" + crypto.createHmac("sha256", TOKEN_SECRET).update(payload).digest("hex");
+}
+
+let _cachedToken: string | null = null;
+let _cachedTokenEmail: string | null = null;
 
 function isValidAdminToken(token: string): boolean {
   if (!token || !token.startsWith("admin-")) return false;
-  const expected = createAdminToken();
-  if (token.length !== expected.length) return false;
-  try {
-    return crypto.timingSafeEqual(Buffer.from(token, "utf8"), Buffer.from(expected, "utf8"));
-  } catch {
-    return false;
-  }
+  if (_cachedToken && token === _cachedToken) return true;
+  return false;
 }
 
-app.post("/api/auth/login", (req, res) => {
-  const { email, password } = req.body ?? {};
-  if (email === ADMIN_EMAIL && password === ADMIN_SECRET) {
-    const token = createAdminToken();
-    return res.json({ token, user: { id: "1", email, role: "admin" } });
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body ?? {};
+    if (typeof email !== "string" || typeof password !== "string") {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const admin = await getOrCreateAdmin();
+    if (
+      email.trim().toLowerCase() !== admin.email ||
+      !verifyPassword(password, admin.passwordHash, admin.passwordSalt)
+    ) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const token = createAdminToken(admin.email);
+    _cachedToken = token;
+    _cachedTokenEmail = admin.email;
+    return res.json({ token, user: { id: admin.id, email: admin.email, role: "admin" } });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-  res.status(401).json({ error: "Invalid credentials" });
 });
 
 function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -108,6 +140,90 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
   }
   next();
 }
+
+// --- Settings endpoints (admin only) ---
+
+app.get("/api/settings/profile", requireAdmin, async (_req, res) => {
+  try {
+    const admin = await getOrCreateAdmin();
+    res.json({ email: admin.email });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/settings/profile", requireAdmin, async (req, res) => {
+  try {
+    const { email } = req.body ?? {};
+    if (typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+    const trimmed = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+
+    const admin = await getOrCreateAdmin();
+    admin.email = trimmed;
+    await admin.save();
+
+    _cachedTokenEmail = trimmed;
+    res.json({ email: admin.email });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/settings/password", requireAdmin, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body ?? {};
+    if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+      return res.status(400).json({ error: "Both current and new passwords are required" });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    }
+
+    const admin = await getOrCreateAdmin();
+    if (!verifyPassword(currentPassword, admin.passwordHash, admin.passwordSalt)) {
+      return res.status(400).json({ error: "Current password is incorrect" });
+    }
+
+    const { hash, salt } = hashPassword(newPassword);
+    admin.passwordHash = hash;
+    admin.passwordSalt = salt;
+    await admin.save();
+
+    const token = createAdminToken(admin.email);
+    _cachedToken = token;
+    _cachedTokenEmail = admin.email;
+
+    res.json({ message: "Password updated successfully", token });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/settings/services", requireAdmin, async (_req, res) => {
+  try {
+    const services = {
+      mongodb: { connected: true },
+      cloudinary: {
+        configured: !!(
+          process.env.CLOUDINARY_CLOUD_NAME &&
+          process.env.CLOUDINARY_CLOUD_NAME !== "your_cloud_name"
+        ),
+      },
+      emailVerification: {
+        configured: !!process.env.ABSTRACTAPI_EMAIL_KEY,
+      },
+    };
+    res.json(services);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Image Upload endpoint
 app.post("/api/upload", requireAdmin, upload.single("image"), async (req, res) => {

@@ -137,7 +137,7 @@ export const ContactPage = () => {
                 className={`w-full border-b py-2 outline-none text-sm transition-colors ${
                   emailError ? 'border-red-400 focus:border-red-500' : 'border-neutral-200 focus:border-amber-500'
                 }`}
-                placeholder="your@gmail.com"
+                placeholder="Enter your email"
                 value={formData.email}
                 onChange={(e) => {
                   setFormData({ ...formData, email: e.target.value });
