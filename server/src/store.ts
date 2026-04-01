@@ -234,7 +234,7 @@ export async function subscribeNewsletter(email: string): Promise<NewsletterDoc>
     { email: email.toLowerCase().trim() },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  const j = doc.toJSON() as Record<string, unknown>;
+  const j = doc.toJSON() as unknown as Record<string, unknown>;
   return {
     id: String(j.id),
     email: String(j.email),
@@ -249,7 +249,7 @@ export async function getNewsletterCount(): Promise<number> {
 export async function getNewsletterSubscribers(): Promise<NewsletterDoc[]> {
   const docs = await Newsletter.find().sort({ createdAt: -1 });
   return docs.map((d) => {
-    const j = d.toJSON() as Record<string, unknown>;
+    const j = d.toJSON() as unknown as Record<string, unknown>;
     return {
       id: String(j.id),
       email: String(j.email),
