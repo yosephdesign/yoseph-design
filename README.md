@@ -5,7 +5,6 @@
 **Live:**
 [Storefront](https://yosephdesign.vercel.app) ·
 [Admin Panel](https://yoseph-design-admin.vercel.app) ·
-[API](https://yosephdesign1.onrender.com)
 
 ---
 
