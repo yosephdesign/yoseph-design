@@ -8,6 +8,7 @@ import { ContactPage } from "./pages/ContactPage";
 import { AboutPage } from "./pages/AboutPage";
 import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
 import { TermsOfServicePage } from "./pages/TermsOfServicePage";
+import { ModelAccessPage } from "./pages/ModelAccessPage";
 import { ShopProvider } from "./context/ShopContext";
 import { CartProvider } from "./context/CartContext";
 import { StudioProvider } from "./context/StudioContext";
@@ -27,6 +28,7 @@ function App() {
                 <Route path="/about" element={<AboutPage />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                 <Route path="/terms" element={<TermsOfServicePage />} />
+                <Route path="/3d-access" element={<ModelAccessPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

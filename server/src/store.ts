@@ -42,6 +42,7 @@ export type OrderDoc = {
   id: string;
   date: string;
   status: OrderStatus;
+  userId?: string;
   items: {
     id: string;
     name: string;

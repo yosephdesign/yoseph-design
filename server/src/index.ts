@@ -38,6 +38,10 @@ import {
   hashPassword,
   verifyPassword,
 } from "./models/AdminSettings.js";
+import { ClientUser } from "./models/ClientUser.js";
+import { Order } from "./models/Order.js";
+import { Product } from "./models/Product.js";
+import { ClientModelAccess } from "./models/ClientModelAccess.js";
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -85,11 +89,57 @@ const pdfUpload = multer({
   },
 });
 
+const MODEL_FILE_EXTENSIONS: Record<string, string[]> = {
+  RVT: [".rvt"],
+  FBX: [".fbx"],
+  OBJ: [".obj"],
+  SKP: [".skp"],
+  "3DS": [".3ds"],
+  DWG: [".dwg"],
+};
+
+const modelUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (
+    req: express.Request,
+    file: Express.Multer.File,
+    cb: multer.FileFilterCallback,
+  ) => {
+    const format = String(req.params.format ?? "")
+      .trim()
+      .toUpperCase();
+    const allowedExts = MODEL_FILE_EXTENSIONS[format];
+
+    if (!allowedExts) {
+      cb(new Error("Unsupported model format"));
+      return;
+    }
+
+    const lower = file.originalname.toLowerCase();
+    const isAllowed = allowedExts.some((ext) => lower.endsWith(ext));
+    if (!isAllowed) {
+      cb(
+        new Error(
+          `Invalid file extension for ${format}. Expected ${allowedExts.join(
+            ", ",
+          )}`,
+        ),
+      );
+      return;
+    }
+
+    cb(null, true);
+  },
+});
+
 // Admin auth — credentials stored in MongoDB with hardcoded fallback
 const DEFAULT_ADMIN_EMAIL = "admin@example.com";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const TOKEN_SECRET =
   process.env.TOKEN_SECRET ?? "fallback-token-secret-change-me";
+const CLIENT_TOKEN_SECRET =
+  process.env.CLIENT_TOKEN_SECRET ?? "fallback-client-secret-change-me";
 
 async function getOrCreateAdmin() {
   let admin = await AdminSettings.findOne();
@@ -114,6 +164,70 @@ function createAdminToken(email: string): string {
 
 let _cachedToken: string | null = null;
 let _cachedTokenEmail: string | null = null;
+
+type ClientAuthPayload = {
+  userId: string;
+  email: string;
+  exp: number;
+};
+
+type ClientRequest = express.Request & {
+  clientUser?: { id: string; email: string };
+};
+
+function safeJsonParse<T>(value: string): T | null {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
+function createClientToken(userId: string, email: string): string {
+  const payload: ClientAuthPayload = {
+    userId,
+    email,
+    exp: Date.now() + 1000 * 60 * 60 * 24 * 30,
+  };
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString(
+    "base64url",
+  );
+  const signature = crypto
+    .createHmac("sha256", CLIENT_TOKEN_SECRET)
+    .update(encodedPayload)
+    .digest("hex");
+  return `client-${encodedPayload}.${signature}`;
+}
+
+function verifyClientToken(token: string): ClientAuthPayload | null {
+  if (!token || !token.startsWith("client-")) return null;
+  const raw = token.slice("client-".length);
+  const dot = raw.lastIndexOf(".");
+  if (dot <= 0) return null;
+
+  const encodedPayload = raw.slice(0, dot);
+  const signature = raw.slice(dot + 1);
+
+  const expected = crypto
+    .createHmac("sha256", CLIENT_TOKEN_SECRET)
+    .update(encodedPayload)
+    .digest("hex");
+
+  if (signature.length !== expected.length) return null;
+  try {
+    const sigBuf = Buffer.from(signature, "hex");
+    const expectedBuf = Buffer.from(expected, "hex");
+    if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) return null;
+  } catch {
+    return null;
+  }
+
+  const decoded = Buffer.from(encodedPayload, "base64url").toString("utf8");
+  const payload = safeJsonParse<ClientAuthPayload>(decoded);
+  if (!payload?.userId || !payload?.email || !payload?.exp) return null;
+  if (payload.exp < Date.now()) return null;
+  return payload;
+}
 
 function isValidAdminToken(token: string): boolean {
   if (!token || !token.startsWith("admin-")) return false;
@@ -159,6 +273,127 @@ function requireAdmin(
   }
   next();
 }
+
+async function hasConfirmedPurchase(
+  userId: string,
+  productId: string,
+): Promise<boolean> {
+  const paidOrder = await Order.findOne({
+    userId,
+    status: { $in: ["processed", "shipped", "delivered"] },
+    "items.id": productId,
+  });
+  return !!paidOrder;
+}
+
+function requireClient(
+  req: ClientRequest,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const payload = verifyClientToken(token);
+  if (!payload) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  req.clientUser = { id: payload.userId, email: payload.email };
+  next();
+}
+
+app.post("/api/client/auth/register", async (req, res) => {
+  try {
+    const { email, password } = req.body ?? {};
+    if (typeof email !== "string" || typeof password !== "string") {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+    if (password.length < 6) {
+      return res
+        .status(400)
+        .json({ error: "Password must be at least 6 characters" });
+    }
+
+    const exists = await ClientUser.findOne({ email: normalizedEmail });
+    if (exists) {
+      return res.status(409).json({ error: "Email is already registered" });
+    }
+
+    const { hash, salt } = hashPassword(password);
+    const user = await ClientUser.create({
+      email: normalizedEmail,
+      passwordHash: hash,
+      passwordSalt: salt,
+    });
+
+    const token = createClientToken(String(user.id), user.email);
+    return res.status(201).json({
+      token,
+      user: { id: String(user.id), email: user.email, role: "client" },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/client/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body ?? {};
+    if (typeof email !== "string" || typeof password !== "string") {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await ClientUser.findOne({ email: normalizedEmail });
+    if (
+      !user ||
+      !verifyPassword(password, user.passwordHash, user.passwordSalt)
+    ) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const token = createClientToken(String(user.id), user.email);
+    return res.json({
+      token,
+      user: { id: String(user.id), email: user.email, role: "client" },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get(
+  "/api/client/auth/me",
+  requireClient,
+  async (req: ClientRequest, res) => {
+    try {
+      const clientUser = req.clientUser;
+      if (!clientUser) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const user = await ClientUser.findById(clientUser.id);
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      res.json({
+        user: { id: String(user.id), email: user.email, role: "client" },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 // --- Settings endpoints (admin only) ---
 
@@ -352,6 +587,75 @@ app.post(
   },
 );
 
+// 3D model file upload endpoint
+app.post(
+  "/api/upload-model-file/:format",
+  requireAdmin,
+  modelUpload.single("file"),
+  async (req, res) => {
+    try {
+      const format = String(req.params.format ?? "")
+        .trim()
+        .toUpperCase();
+      const allowedExts = MODEL_FILE_EXTENSIONS[format];
+
+      if (!allowedExts) {
+        return res.status(400).json({ error: "Unsupported model format" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "No model file provided" });
+      }
+
+      if (
+        !process.env.CLOUDINARY_CLOUD_NAME ||
+        process.env.CLOUDINARY_CLOUD_NAME === "your_cloud_name"
+      ) {
+        return res.status(500).json({
+          error: "Cloudinary not configured",
+          message: "Please set up Cloudinary credentials in server/.env file",
+        });
+      }
+
+      const baseName = req.file.originalname
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[^a-zA-Z0-9-_]/g, "-")
+        .slice(0, 48);
+      const publicId = `${format}-${Date.now()}-${baseName || "model"}`;
+
+      const result = await new Promise<any>((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: "yoseph-design/model-files",
+            resource_type: "raw",
+            public_id: publicId,
+            use_filename: false,
+            unique_filename: true,
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          },
+        );
+        uploadStream.end(req.file!.buffer);
+      });
+
+      res.json({
+        format,
+        fileName: req.file.originalname,
+        url: result.secure_url,
+        public_id: result.public_id,
+      });
+    } catch (error: any) {
+      console.error("Model upload error:", error);
+      res.status(500).json({
+        error: "Model upload failed",
+        message: error.message,
+      });
+    }
+  },
+);
+
 // Products (public read; admin write)
 app.get("/api/products", async (_req, res) => {
   try {
@@ -413,7 +717,12 @@ app.get("/api/orders", requireAdmin, async (_req, res) => {
 app.post("/api/orders", async (req, res) => {
   try {
     const body = req.body as Omit<OrderDoc, "id" | "date">;
-    const created = await createOrder(body);
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
+    const payload = token ? verifyClientToken(token) : null;
+    const created = await createOrder({
+      ...body,
+      userId: payload?.userId,
+    });
     res.status(201).json(created);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -430,6 +739,197 @@ app.put("/api/orders/:id/status", requireAdmin, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.get("/api/admin/client-access/users", requireAdmin, async (_req, res) => {
+  try {
+    const users = await ClientUser.find().sort({ createdAt: -1 });
+
+    const paidOrders = await Order.find({
+      userId: { $exists: true, $ne: null },
+      status: { $in: ["processed", "shipped", "delivered"] },
+    });
+
+    const purchasedByUser = new Map<string, Set<string>>();
+    for (const order of paidOrders) {
+      if (!order.userId) continue;
+      const set = purchasedByUser.get(order.userId) ?? new Set<string>();
+      for (const item of order.items) {
+        if (item.id) set.add(item.id);
+      }
+      purchasedByUser.set(order.userId, set);
+    }
+
+    const allPurchasedModelIds = Array.from(
+      new Set(
+        Array.from(purchasedByUser.values()).flatMap((set) => Array.from(set)),
+      ),
+    );
+
+    const products = allPurchasedModelIds.length
+      ? await Product.find({ _id: { $in: allPurchasedModelIds } })
+      : [];
+
+    const productMap = new Map(
+      products.map((p) => [
+        String(p._id),
+        {
+          id: String(p._id),
+          name: p.name,
+          formats: (p.modelFiles ?? []).map((file) => file.format),
+        },
+      ]),
+    );
+
+    const userIds = users.map((u) => String(u.id));
+    const grants = userIds.length
+      ? await ClientModelAccess.find({ userId: { $in: userIds } })
+      : [];
+
+    const grantedByUser = new Map<string, Set<string>>();
+    for (const grant of grants) {
+      const set = grantedByUser.get(grant.userId) ?? new Set<string>();
+      set.add(grant.productId);
+      grantedByUser.set(grant.userId, set);
+    }
+
+    const payload = users.map((user) => {
+      const uid = String(user.id);
+      const purchasedModelIds = Array.from(purchasedByUser.get(uid) ?? []);
+      const purchasedModels = purchasedModelIds
+        .map((id) => productMap.get(id))
+        .filter(
+          (p): p is { id: string; name: string; formats: string[] } => !!p,
+        );
+
+      return {
+        id: uid,
+        email: user.email,
+        createdAt: user.createdAt,
+        purchasedModels,
+        grantedModelIds: Array.from(grantedByUser.get(uid) ?? []),
+      };
+    });
+
+    res.json(payload);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(
+  "/api/admin/client-access/users/:userId/models/:productId",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { userId, productId } = req.params;
+      const { allowed } = req.body as { allowed?: boolean };
+
+      if (typeof allowed !== "boolean") {
+        return res.status(400).json({ error: "allowed must be boolean" });
+      }
+
+      const user = await ClientUser.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: "Client user not found" });
+      }
+
+      const product = await Product.findById(productId);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+
+      if (!allowed) {
+        await ClientModelAccess.findOneAndDelete({ userId, productId });
+        return res.json({ userId, productId, allowed: false });
+      }
+
+      const purchased = await hasConfirmedPurchase(userId, productId);
+      if (!purchased) {
+        return res.status(400).json({
+          error:
+            "This user has no confirmed purchase for the selected model. Access can only be granted for purchased models.",
+        });
+      }
+
+      const adminEmail = _cachedTokenEmail ?? "admin";
+      await ClientModelAccess.findOneAndUpdate(
+        { userId, productId },
+        { userId, productId, grantedBy: adminEmail },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      );
+
+      return res.json({ userId, productId, allowed: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+app.get(
+  "/api/models/:productId/download",
+  requireClient,
+  async (req: ClientRequest, res) => {
+    try {
+      const clientUser = req.clientUser;
+      const productId = req.params.productId;
+      const format = String(req.query.format ?? "")
+        .trim()
+        .toUpperCase();
+
+      if (!clientUser) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (!format) {
+        return res.status(400).json({ error: "format query is required" });
+      }
+
+      const product = await Product.findById(productId);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+
+      const matchedFile = (product.modelFiles ?? []).find(
+        (file) => file.format.toUpperCase() === format,
+      );
+
+      if (!matchedFile || !matchedFile.url) {
+        return res.status(404).json({ error: "Model file not found" });
+      }
+
+      const paidOrder = await Order.findOne({
+        userId: clientUser.id,
+        status: { $in: ["processed", "shipped", "delivered"] },
+        "items.id": productId,
+      });
+
+      if (!paidOrder) {
+        return res.status(403).json({
+          error: "You need a confirmed purchase to download this 3D model",
+        });
+      }
+
+      const accessGrant = await ClientModelAccess.findOne({
+        userId: clientUser.id,
+        productId,
+      });
+
+      if (!accessGrant) {
+        return res.status(403).json({
+          error:
+            "Download is currently disabled for your account. Please contact admin to enable this model.",
+        });
+      }
+
+      res.json({
+        productId,
+        format,
+        url: matchedFile.url,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 // --- Email verification via AbstractAPI (optional) ---
 

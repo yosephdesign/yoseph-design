@@ -28,6 +28,7 @@ export interface IOrder extends Document {
   orderId: string;
   date: string;
   status: OrderStatus;
+  userId?: string;
   items: IOrderItem[];
   total: number;
   customer: ICustomerInfo;
@@ -65,6 +66,7 @@ const OrderSchema = new Schema<IOrder>(
       enum: ["pending", "processed", "shipped", "delivered", "cancelled"],
       default: "pending",
     },
+    userId: { type: String },
     items: { type: [OrderItemSchema], required: true },
     total: { type: Number, required: true },
     customer: { type: CustomerInfoSchema, required: true },

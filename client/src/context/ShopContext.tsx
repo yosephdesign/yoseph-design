@@ -8,6 +8,7 @@ import {
 import { Product } from "../data/products";
 import { toast } from "sonner";
 import { API_URL } from "../config";
+import { useClientAuthStore } from "../store/clientAuthStore";
 
 interface OrderItem {
   id: string;
@@ -57,10 +58,18 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     try {
       const [firstName, ...lastNameParts] = orderData.customerName.split(" ");
       const lastName = lastNameParts.join(" ") || "";
+      const token = useClientAuthStore.getState().getToken();
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
 
       const res = await fetch(`${API_URL}/api/orders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           status: "pending",
           items: orderData.items.map((item) => ({

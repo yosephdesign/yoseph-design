@@ -19,6 +19,7 @@ import {
   Trash2,
   Save,
   X,
+  UploadCloud,
 } from "lucide-react";
 import { useAdminStore } from "../../store/adminStore";
 import { Product } from "../../data/products";
@@ -38,6 +39,8 @@ import {
   DialogFooter,
 } from "../ui/dialog";
 import { toast } from "sonner";
+import { API_URL } from "../../config";
+import { useAdminAuthStore } from "../../store/adminAuthStore";
 
 const MODEL_FORMATS = ["RVT", "FBX", "OBJ", "SKP", "3DS", "DWG"] as const;
 
@@ -57,10 +60,15 @@ interface ModelFile {
 
 export const ModelManagement: React.FC = () => {
   const { products, loading, fetchProducts, updateProduct } = useAdminStore();
+  const token = useAdminAuthStore((state) => state.token);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [localFiles, setLocalFiles] = useState<ModelFile[]>([]);
   const [saving, setSaving] = useState(false);
+  const [uploadingByIndex, setUploadingByIndex] = useState<
+    Record<number, boolean>
+  >({});
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -95,6 +103,80 @@ export const ModelManagement: React.FC = () => {
     const updated = [...localFiles];
     updated[index] = { ...updated[index], url };
     setLocalFiles(updated);
+  };
+
+  const setUploading = (index: number, value: boolean) => {
+    setUploadingByIndex((prev) => ({ ...prev, [index]: value }));
+  };
+
+  const uploadFileForFormat = async (index: number, file: File) => {
+    const target = localFiles[index];
+    if (!target) return;
+
+    const format = target.format.toUpperCase();
+    setUploading(index, true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(
+        `${API_URL}/api/upload-model-file/${encodeURIComponent(format)}`,
+        {
+          method: "POST",
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: formData,
+        },
+      );
+
+      if (res.status === 401) {
+        toast.error("Session expired. Please login again.");
+        return;
+      }
+
+      const body = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+
+      if (!res.ok || !body.url) {
+        throw new Error(body.error || "Upload failed");
+      }
+
+      updateUrl(index, body.url);
+      toast.success(`Uploaded ${file.name} for ${format}`);
+    } catch (error: any) {
+      console.error("Model file upload failed:", error);
+      toast.error(error?.message || "Failed to upload model file");
+    } finally {
+      setUploading(index, false);
+      setDragOverIndex((current) => (current === index ? null : current));
+    }
+  };
+
+  const onDropFile = async (
+    e: React.DragEvent<HTMLDivElement>,
+    index: number,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverIndex(null);
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await uploadFileForFormat(index, file);
+  };
+
+  const onPickFile = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    index: number,
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    await uploadFileForFormat(index, file);
   };
 
   const handleSave = async () => {
@@ -287,24 +369,66 @@ export const ModelManagement: React.FC = () => {
                 {localFiles.map((file, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-2 p-3 bg-neutral-50 rounded-lg border border-neutral-100"
+                    className="space-y-2 p-3 bg-neutral-50 rounded-lg border border-neutral-100"
                   >
-                    <span className="text-xs font-bold text-neutral-700 bg-white px-2.5 py-1.5 rounded border border-neutral-200 shrink-0 font-mono">
-                      .{file.format.toLowerCase()}
-                    </span>
-                    <Input
-                      placeholder="Download URL (optional)"
-                      value={file.url || ""}
-                      onChange={(e) => updateUrl(index, e.target.value)}
-                      className="h-8 text-xs flex-1"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeFormat(index)}
-                      className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-neutral-700 bg-white px-2.5 py-1.5 rounded border border-neutral-200 shrink-0 font-mono">
+                        .{file.format.toLowerCase()}
+                      </span>
+                      <Input
+                        placeholder="Download URL (optional)"
+                        value={file.url || ""}
+                        onChange={(e) => updateUrl(index, e.target.value)}
+                        className="h-8 text-xs flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeFormat(index)}
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverIndex(index);
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault();
+                        if (dragOverIndex === index) setDragOverIndex(null);
+                      }}
+                      onDrop={(e) => onDropFile(e, index)}
+                      className={`rounded-md border border-dashed px-3 py-2 transition-colors ${
+                        dragOverIndex === index
+                          ? "border-amber-400 bg-amber-50"
+                          : "border-neutral-300 bg-white"
+                      }`}
                     >
-                      <X size={14} />
-                    </button>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-[11px] text-neutral-500">
+                          Drag and drop .{file.format.toLowerCase()} file here
+                          or choose file.
+                        </p>
+                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-[11px] font-medium text-neutral-700 hover:bg-neutral-100">
+                          {uploadingByIndex[index] ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <UploadCloud size={12} />
+                          )}
+                          {uploadingByIndex[index]
+                            ? "Uploading..."
+                            : "Choose File"}
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => onPickFile(e, index)}
+                            disabled={!!uploadingByIndex[index]}
+                          />
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
