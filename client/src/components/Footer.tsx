@@ -139,14 +139,27 @@ export const Footer = () => {
             </p>
             <div className="flex gap-3">
               {socialLinks.map((social) => (
-                <a
-                  key={social.name}
-                  href={social.href}
-                  aria-label={social.name}
-                  className="w-9 h-9 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 hover:bg-amber-500 hover:text-white transition-all"
-                >
-                  <social.icon size={16} />
-                </a>
+                social.href === "#" ? (
+                  <span
+                    key={social.name}
+                    aria-label={`${social.name} unavailable`}
+                    title={`${social.name} coming soon`}
+                    className="w-9 h-9 rounded-full bg-neutral-800/70 flex items-center justify-center text-neutral-500 cursor-not-allowed"
+                  >
+                    <social.icon size={16} />
+                  </span>
+                ) : (
+                  <a
+                    key={social.name}
+                    href={social.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={social.name}
+                    className="w-9 h-9 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 hover:bg-amber-500 hover:text-white transition-all"
+                  >
+                    <social.icon size={16} />
+                  </a>
+                )
               ))}
             </div>
           </div>
@@ -245,27 +258,36 @@ export const Footer = () => {
             </h4>
             <ul className="space-y-3 text-sm text-neutral-400">
               <li>
-                <a href="#" className="hover:text-amber-400 transition-colors">
+                <Link
+                  to="/contact?topic=faqs"
+                  className="hover:text-amber-400 transition-colors"
+                >
                   FAQs
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-amber-400 transition-colors">
+                <Link
+                  to="/contact?topic=order-tracking"
+                  className="hover:text-amber-400 transition-colors"
+                >
                   Order Tracking
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-amber-400 transition-colors">
+                <Link
+                  to="/contact?topic=size-guide"
+                  className="hover:text-amber-400 transition-colors"
+                >
                   Size Guide
-                </a>
+                </Link>
               </li>
               <li>
-                <a
-                  href="/about"
+                <Link
+                  to="/about"
                   className="hover:text-amber-400 transition-colors"
                 >
                   About Us
-                </a>
+                </Link>
               </li>
               <li>
                 <Link
