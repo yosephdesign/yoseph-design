@@ -4,6 +4,7 @@ import dns from "dns/promises";
 import express from "express";
 import cors from "cors";
 import multer from "multer";
+import { Resend } from "resend";
 import { v2 as cloudinary } from "cloudinary";
 import { connectDB } from "./db.js";
 import {
@@ -274,6 +275,62 @@ function requireAdmin(
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
+}
+
+async function sendProductAnnouncement(email: string, product: ProductDoc) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from =
+    process.env.RESEND_FROM ?? "Yoseph Design <onboarding@resend.dev>";
+
+  if (!apiKey) {
+    console.warn(
+      "Resend is not configured. Skipping product announcement email to",
+      email,
+    );
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+
+  const productUrl = `${process.env.CLIENT_URL ?? "http://localhost:3000"}/?product=${encodeURIComponent(product.id)}`;
+
+  const { error } = await resend.emails.send({
+    from,
+    to: email,
+    subject: `New product added: ${product.name}`,
+    text: `A new product is now available: ${product.name}\n\n${product.description}\n\nView it here: ${productUrl}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111">
+        <h2 style="margin:0 0 12px">New product added</h2>
+        <p style="margin:0 0 12px"><strong>${product.name}</strong></p>
+        <p style="margin:0 0 16px">${product.description}</p>
+        <p style="margin:0 0 16px"><a href="${productUrl}" style="display:inline-block;padding:10px 16px;background:#d97706;color:#fff;text-decoration:none;border-radius:8px">View product</a></p>
+      </div>
+    `,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+async function notifySubscribersAboutProduct(product: ProductDoc) {
+  try {
+    const subscribers = await getNewsletterSubscribers();
+    if (subscribers.length === 0) return;
+
+    const batchSize = 25;
+    for (let i = 0; i < subscribers.length; i += batchSize) {
+      const batch = subscribers.slice(i, i + batchSize);
+      await Promise.allSettled(
+        batch.map((subscriber) =>
+          sendProductAnnouncement(subscriber.email, product),
+        ),
+      );
+    }
+  } catch (error) {
+    console.error("Failed to notify subscribers about new product:", error);
+  }
 }
 
 async function hasConfirmedPurchase(
@@ -681,6 +738,7 @@ app.post("/api/products", requireAdmin, async (req, res) => {
   try {
     const body = req.body as Omit<ProductDoc, "id">;
     const created = await addProduct(body);
+    void notifySubscribersAboutProduct(created);
     res.status(201).json(created);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
